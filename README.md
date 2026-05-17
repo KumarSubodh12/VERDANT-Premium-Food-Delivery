@@ -1,6 +1,8 @@
 # 🌿 VERDANT — Premium Food Delivery Website
 Deployment Link - https://verdant-premium-food-delivery-production.up.railway.app/
 
+MADE BY _ KUMAR SUBODH ❤️
+
 A full-stack premium food delivery web app with **hand gesture control**, shuffle & scroll animations, a stunning dark-green premium theme, and **Stripe payment integration**.
 
 ---
