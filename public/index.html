@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VERDANT — Premium Food Delivery</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Cormorant+Garamond:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://js.stripe.com/v3/"></script>
+<style>
+:root {
+  --bg: #050f08;
+  --bg-card: #091a0f;
+  --bg-card2: #0d2217;
+  --green-deep: #0a2e18;
+  --green-mid: #1a5c35;
+  --green-bright: #2d9e5f;
+  --green-glow: #3ddc84;
+  --gold: #c9a84c;
+  --gold-light: #e8c96a;
+  --white: #f0f7f2;
+  --white-dim: rgba(240,247,242,0.55);
+  --white-faint: rgba(240,247,242,0.2);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--white);font-family:'Cormorant Garamond',serif;cursor:none;overflow-x:hidden;line-height:1.6;}
+
+/* ─── CURSOR ─── */
+#hand-cursor{position:fixed;width:28px;height:28px;border-radius:50%;border:2px solid var(--green-glow);pointer-events:none;z-index:9999;transform:translate(-50%,-50%);transition:left .04s linear,top .04s linear,width .2s,height .2s,border-color .2s;box-shadow:0 0 18px rgba(61,220,132,.5),0 0 40px rgba(61,220,132,.2);}
+#hand-cursor::after{content:'';position:absolute;inset:4px;border-radius:50%;background:rgba(61,220,132,.3);}
+#hand-cursor.pinch{width:44px;height:44px;border-color:var(--gold);box-shadow:0 0 30px var(--gold),0 0 60px rgba(201,168,76,.3);}
+#hand-cursor.pinch::after{background:rgba(201,168,76,.3);}
+#mouse-cursor{position:fixed;width:10px;height:10px;border-radius:50%;background:var(--green-glow);pointer-events:none;z-index:9999;transform:translate(-50%,-50%);transition:left .06s,top .06s;}
+
+/* ─── CAMERA ─── */
+#cam-wrap{position:fixed;bottom:24px;right:24px;z-index:1000;border-radius:14px;overflow:hidden;border:1px solid var(--green-mid);width:160px;height:110px;background:#000;box-shadow:0 8px 40px rgba(0,0,0,.6);}
+#cam-video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block;}
+#cam-canvas{position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1);}
+#cam-label{position:absolute;top:6px;left:8px;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--green-glow);text-transform:uppercase;text-shadow:0 0 8px var(--green-glow);}
+#cam-status{position:absolute;bottom:6px;right:8px;width:7px;height:7px;border-radius:50%;background:#555;}
+#cam-status.active{background:var(--green-glow);box-shadow:0 0 8px var(--green-glow);}
+
+/* ─── GESTURE GUIDE ─── */
+#gesture-guide{position:fixed;bottom:154px;right:24px;z-index:1000;background:rgba(9,26,15,.92);border:1px solid rgba(26,92,53,.6);border-radius:12px;padding:14px 16px;width:170px;backdrop-filter:blur(12px);}
+.g-title{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:3px;color:var(--green-glow);text-transform:uppercase;margin-bottom:10px;}
+.g-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-family:'Space Mono',monospace;font-size:9px;color:var(--white-dim);letter-spacing:.5px;}
+.g-icon{font-size:14px;width:18px;text-align:center;}
+
+/* ─── GESTURE FLASH ─── */
+#gesture-flash{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Space Mono',monospace;font-size:12px;letter-spacing:4px;color:var(--green-glow);text-transform:uppercase;pointer-events:none;z-index:5000;opacity:0;transition:opacity .3s;text-shadow:0 0 20px var(--green-glow);}
+#gesture-flash.show{opacity:1;}
+
+/* ─── NAV ─── */
+nav{position:fixed;top:0;width:100%;padding:22px 60px;display:flex;justify-content:space-between;align-items:center;z-index:200;background:linear-gradient(to bottom,rgba(5,15,8,.95) 0%,transparent 100%);backdrop-filter:blur(8px);}
+.logo{font-family:'Playfair Display',serif;font-size:26px;letter-spacing:5px;text-transform:uppercase;color:var(--white);}
+.logo em{font-style:normal;color:var(--green-glow);}
+nav ul{display:flex;gap:36px;list-style:none;}
+nav ul li a{color:var(--white-dim);text-decoration:none;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:2px;text-transform:uppercase;transition:color .3s;}
+nav ul li a:hover{color:var(--green-glow);}
+.nav-cart{background:transparent;border:1px solid rgba(61,220,132,.35);color:var(--white);padding:9px 22px;border-radius:4px;cursor:none;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:2px;text-transform:uppercase;transition:all .3s;position:relative;}
+.nav-cart:hover{background:rgba(61,220,132,.1);border-color:var(--green-glow);}
+.cart-count{position:absolute;top:-8px;right:-8px;background:var(--gold);color:#000;width:20px;height:20px;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .3s;}
+.cart-count.show{opacity:1;}
+
+/* ─── HERO ─── */
+#hero{height:100vh;display:flex;align-items:center;position:relative;overflow:hidden;padding:0 60px;}
+.hero-bg{position:absolute;inset:0;background:radial-gradient(ellipse 60% 70% at 20% 50%,rgba(13,59,34,.85) 0%,transparent 65%),radial-gradient(ellipse 40% 40% at 80% 30%,rgba(26,92,53,.3) 0%,transparent 55%),var(--bg);}
+.hero-noise{position:absolute;inset:0;opacity:.03;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");}
+.hero-content{position:relative;z-index:2;max-width:680px;}
+.hero-eyebrow{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:5px;color:var(--green-glow);text-transform:uppercase;margin-bottom:22px;opacity:0;animation:fadeUp .9s .4s forwards;}
+.hero-title{font-family:'Playfair Display',serif;font-size:clamp(52px,8vw,110px);line-height:.95;margin-bottom:26px;opacity:0;animation:fadeUp .9s .6s forwards;}
+.hero-title em{font-style:italic;color:var(--green-glow);display:block;}
+.hero-body{font-size:19px;color:var(--white-dim);font-weight:300;line-height:1.7;max-width:420px;margin-bottom:44px;opacity:0;animation:fadeUp .9s .8s forwards;}
+.hero-btns{display:flex;gap:16px;opacity:0;animation:fadeUp .9s 1s forwards;}
+.btn-primary{background:var(--green-bright);color:#fff;border:none;padding:16px 38px;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:2px;text-transform:uppercase;cursor:none;border-radius:4px;transition:all .3s;box-shadow:0 0 30px rgba(45,158,95,.4);}
+.btn-primary:hover{background:var(--green-glow);box-shadow:0 0 50px rgba(61,220,132,.6);transform:translateY(-2px);}
+.btn-ghost{background:transparent;color:var(--white);border:1px solid var(--white-faint);padding:16px 38px;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:2px;text-transform:uppercase;cursor:none;border-radius:4px;transition:all .3s;}
+.btn-ghost:hover{border-color:var(--green-glow);color:var(--green-glow);}
+
+/* Hero orbit */
+.hero-orbit{position:absolute;right:8%;top:50%;transform:translateY(-50%);width:440px;height:440px;pointer-events:none;}
+.orbit-ring{position:absolute;inset:0;border:1px solid rgba(61,220,132,.12);border-radius:50%;}
+.orbit-ring:nth-child(2){inset:40px;border-color:rgba(61,220,132,.08);}
+.orbit-ring:nth-child(3){inset:80px;border-color:rgba(61,220,132,.05);}
+.f-item{position:absolute;font-size:64px;top:50%;left:50%;filter:drop-shadow(0 0 20px rgba(61,220,132,.4));animation:orbit1 9s linear infinite;}
+.f-item:nth-child(4){animation:orbit1 9s linear infinite;}
+.f-item:nth-child(5){animation:orbit2 12s linear infinite;}
+.f-item:nth-child(6){animation:orbit3 7s linear infinite;}
+@keyframes orbit1{from{transform:rotate(0deg) translateX(180px) rotate(0deg);}to{transform:rotate(360deg) translateX(180px) rotate(-360deg);}}
+@keyframes orbit2{from{transform:rotate(120deg) translateX(180px) rotate(-120deg);}to{transform:rotate(480deg) translateX(180px) rotate(-480deg);}}
+@keyframes orbit3{from{transform:rotate(240deg) translateX(180px) rotate(-240deg);}to{transform:rotate(600deg) translateX(180px) rotate(-600deg);}}
+
+/* Particles */
+.particle{position:absolute;border-radius:50%;background:var(--green-glow);pointer-events:none;}
+
+/* Scroll indicator */
+.scroll-ind{position:absolute;bottom:40px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;opacity:.5;}
+.scroll-line{width:1px;height:50px;background:linear-gradient(to bottom,transparent,var(--green-glow));animation:scrollLine 2s ease-in-out infinite;}
+.scroll-txt{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:3px;color:var(--white-dim);text-transform:uppercase;}
+@keyframes scrollLine{0%,100%{opacity:.3;transform:scaleY(.5);}50%{opacity:1;transform:scaleY(1);}}
+
+/* ─── STATS ─── */
+#stats{display:grid;grid-template-columns:repeat(4,1fr);background:var(--green-deep);border-top:1px solid rgba(45,158,95,.25);border-bottom:1px solid rgba(45,158,95,.25);}
+.stat-item{padding:48px 20px;text-align:center;border-right:1px solid rgba(45,158,95,.15);}
+.stat-item:last-child{border-right:none;}
+.stat-num{font-family:'Playfair Display',serif;font-size:52px;color:var(--green-glow);line-height:1;display:block;}
+.stat-lbl{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:3px;color:var(--white-dim);text-transform:uppercase;margin-top:8px;display:block;}
+
+/* ─── MENU ─── */
+#menu{padding:110px 60px;}
+.section-label{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:5px;color:var(--green-glow);text-transform:uppercase;margin-bottom:14px;}
+.section-title{font-family:'Playfair Display',serif;font-size:clamp(34px,5vw,62px);line-height:1.05;}
+.section-header-row{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:20px;}
+.filter-row{display:flex;gap:10px;margin-bottom:50px;flex-wrap:wrap;}
+.filter-btn{background:transparent;border:1px solid rgba(26,92,53,.5);color:var(--white-dim);padding:8px 20px;border-radius:20px;cursor:none;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;transition:all .3s;}
+.filter-btn:hover,.filter-btn.active{background:var(--green-mid);border-color:var(--green-bright);color:var(--white);box-shadow:0 0 15px rgba(45,158,95,.25);}
+.shuffle-btn{background:transparent;border:1px solid rgba(61,220,132,.4);color:var(--green-glow);padding:11px 26px;border-radius:4px;cursor:none;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;transition:all .3s;display:flex;align-items:center;gap:10px;}
+.shuffle-btn:hover{background:rgba(61,220,132,.08);box-shadow:0 0 20px rgba(61,220,132,.15);}
+.shuffle-icon{font-size:16px;display:inline-block;transition:transform .5s;}
+.shuffle-btn:hover .shuffle-icon{transform:rotate(180deg);}
+
+/* Menu grid */
+.menu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:22px;}
+.menu-card{background:var(--bg-card);border:1px solid rgba(26,92,53,.4);border-radius:18px;overflow:hidden;transition:transform .4s cubic-bezier(.4,0,.2,1),border-color .4s,box-shadow .4s;cursor:none;position:relative;}
+.menu-card:hover{transform:translateY(-10px);border-color:rgba(45,158,95,.7);box-shadow:0 24px 60px rgba(0,0,0,.5),0 0 40px rgba(45,158,95,.12);}
+.menu-card.hovered{transform:translateY(-10px);border-color:rgba(45,158,95,.7);box-shadow:0 24px 60px rgba(0,0,0,.5),0 0 40px rgba(45,158,95,.12);}
+@keyframes shuffleOut{0%{transform:translateX(0) rotateY(0deg) scale(1);opacity:1;}100%{transform:translateX(-120px) rotateY(-25deg) scale(.8);opacity:0;}}
+@keyframes shuffleIn{0%{transform:translateX(120px) rotateY(25deg) scale(.8);opacity:0;}100%{transform:translateX(0) rotateY(0deg) scale(1);opacity:1;}}
+.card-img{height:195px;display:flex;align-items:center;justify-content:center;font-size:80px;background:linear-gradient(135deg,var(--green-deep) 0%,var(--bg-card2) 100%);position:relative;overflow:hidden;}
+.card-img::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(61,220,132,.06) 0%,transparent 70%);}
+.card-badge{position:absolute;top:12px;right:12px;background:var(--gold);color:#000;font-family:'Space Mono',monospace;font-size:8px;letter-spacing:1.5px;padding:4px 10px;border-radius:20px;font-weight:700;text-transform:uppercase;}
+.card-badge.new-badge{background:var(--green-glow);color:#000;}
+.card-body{padding:20px;}
+.card-name{font-family:'Playfair Display',serif;font-size:21px;margin-bottom:6px;}
+.card-desc{font-size:13.5px;color:var(--white-dim);line-height:1.55;margin-bottom:18px;}
+.card-footer{display:flex;justify-content:space-between;align-items:center;}
+.card-price{font-family:'Playfair Display',serif;font-size:26px;color:var(--green-glow);}
+.card-price sub{font-size:14px;color:var(--white-dim);font-family:'Cormorant Garamond',serif;vertical-align:baseline;}
+.add-btn{width:42px;height:42px;border-radius:50%;background:var(--green-mid);border:1px solid var(--green-bright);color:#fff;font-size:22px;display:flex;align-items:center;justify-content:center;cursor:none;transition:all .3s;line-height:1;}
+.add-btn:hover,.add-btn.hovered{background:var(--green-bright);box-shadow:0 0 20px rgba(45,158,95,.5);transform:scale(1.12);}
+.add-btn.added{background:var(--gold);border-color:var(--gold);animation:pulse-add .4s ease;}
+@keyframes pulse-add{0%,100%{transform:scale(1);}50%{transform:scale(1.25);}}
+
+/* ─── SPECIALS ─── */
+#specials{padding:100px 60px;display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;}
+.specials-visual{position:relative;height:520px;}
+.spec-card{position:absolute;background:var(--bg-card2);border:1px solid rgba(26,92,53,.5);border-radius:22px;padding:28px;text-align:center;transition:transform .5s ease;}
+.spec-card:hover{transform:scale(1.04);}
+.spec-card:nth-child(1){top:0;left:0;width:260px;}
+.spec-card:nth-child(2){bottom:60px;right:0;width:280px;}
+.spec-card:nth-child(3){top:180px;left:50%;transform:translateX(-50%);width:200px;}
+.spec-emoji{font-size:70px;display:block;margin-bottom:14px;}
+.spec-name{font-family:'Playfair Display',serif;font-size:20px;margin-bottom:6px;}
+.spec-price{font-family:'Space Mono',monospace;font-size:13px;color:var(--green-glow);}
+.spec-off{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--gold);text-transform:uppercase;margin-top:4px;}
+.specials-text .section-label{margin-bottom:14px;}
+.specials-text .section-title{margin-bottom:20px;}
+.specials-text p{font-size:18px;color:var(--white-dim);line-height:1.7;margin-bottom:32px;}
+.specials-text ul{list-style:none;margin-bottom:36px;}
+.specials-text ul li{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:1px;color:var(--white-dim);padding:10px 0;border-bottom:1px solid rgba(26,92,53,.3);display:flex;align-items:center;gap:10px;}
+.check{color:var(--green-glow);font-size:14px;}
+
+/* ─── PROCESS ─── */
+#process{padding:100px 60px;text-align:center;}
+#process .section-label{margin-bottom:14px;}
+#process .section-title{margin-bottom:60px;}
+.process-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;position:relative;}
+.process-grid::before{content:'';position:absolute;top:44px;left:12.5%;width:75%;height:1px;background:linear-gradient(to right,transparent,var(--green-mid),var(--green-mid),transparent);}
+.process-step{padding:40px 24px;position:relative;z-index:1;}
+.step-num{width:88px;height:88px;border-radius:50%;background:var(--bg-card2);border:1px solid var(--green-mid);display:flex;align-items:center;justify-content:center;font-size:44px;margin:0 auto 24px;transition:all .4s;}
+.process-step:hover .step-num{background:var(--green-deep);border-color:var(--green-bright);box-shadow:0 0 30px rgba(45,158,95,.25);}
+.step-title{font-family:'Playfair Display',serif;font-size:20px;margin-bottom:10px;}
+.step-desc{font-size:14px;color:var(--white-dim);line-height:1.6;}
+
+/* ─── SCROLL REVEAL ─── */
+.sr{opacity:0;transform:translateY(35px);transition:opacity .85s cubic-bezier(.4,0,.2,1),transform .85s cubic-bezier(.4,0,.2,1);}
+.sr.visible{opacity:1;transform:translateY(0);}
+.sr-left{opacity:0;transform:translateX(-40px);transition:opacity .85s cubic-bezier(.4,0,.2,1),transform .85s cubic-bezier(.4,0,.2,1);}
+.sr-left.visible{opacity:1;transform:translateX(0);}
+.sr-right{opacity:0;transform:translateX(40px);transition:opacity .85s cubic-bezier(.4,0,.2,1),transform .85s cubic-bezier(.4,0,.2,1);}
+.sr-right.visible{opacity:1;transform:translateX(0);}
+
+/* ─── CART SIDEBAR ─── */
+#cart{position:fixed;right:-420px;top:0;width:420px;height:100vh;background:var(--bg-card2);border-left:1px solid rgba(26,92,53,.6);z-index:300;transition:right .45s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;padding:32px;}
+#cart.open{right:0;}
+.cart-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;padding-bottom:22px;border-bottom:1px solid rgba(26,92,53,.4);}
+.cart-head h2{font-family:'Playfair Display',serif;font-size:28px;}
+.close-cart{background:transparent;border:none;color:var(--white-dim);font-size:28px;cursor:none;transition:color .2s;line-height:1;}
+.close-cart:hover{color:var(--white);}
+.cart-items-list{flex:1;overflow-y:auto;padding-right:4px;}
+.cart-items-list::-webkit-scrollbar{width:3px;}
+.cart-items-list::-webkit-scrollbar-track{background:transparent;}
+.cart-items-list::-webkit-scrollbar-thumb{background:var(--green-mid);border-radius:2px;}
+.cart-item{display:flex;gap:14px;padding:16px 0;border-bottom:1px solid rgba(13,34,23,.8);}
+.ci-emoji{font-size:44px;flex-shrink:0;}
+.ci-info{flex:1;}
+.ci-name{font-family:'Playfair Display',serif;font-size:17px;margin-bottom:4px;}
+.ci-price{color:var(--green-glow);font-size:17px;font-family:'Space Mono',monospace;}
+.ci-qty{display:flex;align-items:center;gap:10px;margin-top:8px;}
+.qty-btn{width:26px;height:26px;border-radius:50%;background:rgba(26,92,53,.5);border:1px solid rgba(45,158,95,.4);color:var(--white);font-size:15px;display:flex;align-items:center;justify-content:center;cursor:none;transition:all .2s;}
+.qty-btn:hover{background:var(--green-mid);}
+.qty-num{font-family:'Space Mono',monospace;font-size:12px;min-width:18px;text-align:center;}
+.ci-del{background:transparent;border:none;color:rgba(240,247,242,.3);font-size:18px;cursor:none;transition:color .2s;align-self:flex-start;}
+.ci-del:hover{color:#ff6b6b;}
+.cart-summary{padding-top:22px;border-top:1px solid rgba(26,92,53,.4);}
+.summary-row{display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:11px;color:var(--white-dim);letter-spacing:.5px;margin-bottom:8px;}
+.summary-row.total{font-family:'Playfair Display',serif;font-size:24px;color:var(--white);margin-top:14px;letter-spacing:0;}
+.checkout-btn{width:100%;padding:18px;background:linear-gradient(135deg,var(--green-bright),var(--green-glow));border:none;color:#fff;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:2px;text-transform:uppercase;cursor:none;border-radius:8px;margin-top:18px;transition:all .3s;box-shadow:0 0 30px rgba(45,158,95,.3);}
+.checkout-btn:hover{box-shadow:0 0 50px rgba(61,220,132,.5);transform:translateY(-2px);}
+.empty-cart{text-align:center;padding:60px 20px;color:var(--white-dim);}
+.empty-cart .ec-icon{font-size:60px;margin-bottom:16px;display:block;}
+.empty-cart p{font-size:16px;}
+
+/* ─── PAYMENT MODAL ─── */
+#payment-overlay{position:fixed;inset:0;background:rgba(5,15,8,.93);z-index:400;display:none;align-items:center;justify-content:center;backdrop-filter:blur(8px);}
+#payment-overlay.active{display:flex;}
+.modal{background:var(--bg-card);border:1px solid rgba(26,92,53,.7);border-radius:24px;padding:48px;width:500px;max-width:92vw;box-shadow:0 60px 160px rgba(0,0,0,.8),0 0 80px rgba(13,59,34,.3);max-height:90vh;overflow-y:auto;}
+.modal::-webkit-scrollbar{width:3px;}
+.modal::-webkit-scrollbar-thumb{background:var(--green-mid);border-radius:2px;}
+.modal-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+.modal-title{font-family:'Playfair Display',serif;font-size:32px;}
+.modal-sub{color:var(--white-dim);font-size:15px;margin-bottom:32px;}
+.close-modal{background:transparent;border:none;color:var(--white-dim);font-size:26px;cursor:none;transition:color .2s;line-height:1;}
+.close-modal:hover{color:var(--white);}
+.order-summary-mini{background:rgba(13,59,34,.25);border:1px solid rgba(45,158,95,.2);border-radius:12px;padding:16px 20px;margin-bottom:28px;}
+.osm-title{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:3px;color:var(--green-glow);text-transform:uppercase;margin-bottom:12px;}
+.osm-item{display:flex;justify-content:space-between;font-size:14px;color:var(--white-dim);margin-bottom:6px;}
+.osm-total{display:flex;justify-content:space-between;font-family:'Playfair Display',serif;font-size:20px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(45,158,95,.2);}
+.form-group{margin-bottom:18px;}
+.form-label{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--white-dim);display:block;margin-bottom:7px;}
+.form-input{width:100%;background:rgba(13,59,34,.25);border:1px solid rgba(45,158,95,.35);border-radius:8px;padding:13px 15px;color:var(--white);font-family:'Cormorant Garamond',serif;font-size:16px;outline:none;transition:border-color .3s;}
+.form-input:focus{border-color:var(--green-glow);box-shadow:0 0 20px rgba(61,220,132,.08);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.stripe-field{background:rgba(13,59,34,.25);border:1px solid rgba(45,158,95,.35);border-radius:8px;padding:14px 15px;transition:border-color .3s;}
+.stripe-field.StripeElement--focus{border-color:var(--green-glow);}
+.pay-btn{width:100%;padding:18px;background:linear-gradient(135deg,var(--green-bright),var(--green-glow));border:none;color:#fff;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:2px;text-transform:uppercase;cursor:none;border-radius:8px;margin-top:24px;transition:all .3s;box-shadow:0 0 40px rgba(45,158,95,.35);position:relative;overflow:hidden;}
+.pay-btn:hover{box-shadow:0 0 60px rgba(61,220,132,.55);transform:translateY(-2px);}
+.pay-btn:disabled{opacity:.6;transform:none;cursor:not-allowed;}
+.pay-btn .spinner{display:none;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.secure-note{text-align:center;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--white-faint);margin-top:14px;text-transform:uppercase;}
+.test-note{background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);border-radius:8px;padding:12px 16px;margin-top:16px;font-family:'Space Mono',monospace;font-size:10px;color:var(--gold);letter-spacing:.5px;line-height:1.6;}
+
+/* ─── SUCCESS ─── */
+#success-screen{display:none;text-align:center;padding:20px 0;}
+#success-screen.active{display:block;}
+.success-icon{font-size:70px;margin-bottom:20px;display:block;}
+.success-title{font-family:'Playfair Display',serif;font-size:36px;margin-bottom:10px;}
+.success-sub{color:var(--white-dim);font-size:16px;line-height:1.6;}
+
+/* ─── TOAST ─── */
+#toast{position:fixed;bottom:44px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--green-deep);border:1px solid var(--green-bright);color:var(--white);padding:14px 30px;border-radius:40px;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:1px;z-index:5000;transition:transform .4s cubic-bezier(.4,0,.2,1);white-space:nowrap;box-shadow:0 0 30px rgba(45,158,95,.3);}
+#toast.show{transform:translateX(-50%) translateY(0);}
+
+/* ─── FOOTER ─── */
+footer{padding:70px 60px 30px;border-top:1px solid rgba(26,92,53,.3);}
+.footer-grid{display:grid;grid-template-columns:2.2fr 1fr 1fr 1fr;gap:48px;margin-bottom:60px;}
+.footer-brand .logo{font-size:22px;letter-spacing:5px;display:block;margin-bottom:14px;}
+.footer-brand p{color:var(--white-dim);font-size:14px;line-height:1.7;max-width:280px;}
+.footer-col h4{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:var(--green-glow);margin-bottom:18px;}
+.footer-col ul{list-style:none;}
+.footer-col ul li{margin-bottom:11px;}
+.footer-col ul li a{color:var(--white-dim);text-decoration:none;font-size:14px;transition:color .3s;}
+.footer-col ul li a:hover{color:var(--green-glow);}
+.footer-bottom{border-top:1px solid rgba(26,92,53,.2);padding-top:28px;display:flex;justify-content:space-between;align-items:center;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:1px;color:rgba(240,247,242,.25);}
+.social-links{display:flex;gap:16px;}
+.social-link{width:36px;height:36px;border:1px solid rgba(26,92,53,.5);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;text-decoration:none;color:var(--white-dim);transition:all .3s;}
+.social-link:hover{border-color:var(--green-glow);color:var(--green-glow);}
+
+/* ─── UTILS ─── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(30px);}to{opacity:1;transform:translateY(0);}}
+@media(max-width:900px){
+  nav ul,.hero-orbit{display:none;}
+  #specials,#stats{grid-template-columns:1fr;}
+  .process-grid{grid-template-columns:repeat(2,1fr);}
+  .process-grid::before{display:none;}
+  .footer-grid{grid-template-columns:1fr;}
+  #hero,#menu,#specials,#process{padding:80px 24px;}
+  nav{padding:18px 24px;}
+  #stats .stat-item{border-right:none;border-bottom:1px solid rgba(45,158,95,.15);}
+  .section-header-row{flex-direction:column;align-items:flex-start;gap:14px;}
+}
+</style>
+</head>
+<body>
+
+<!-- CURSOR -->
+<div id="hand-cursor"></div>
+<div id="mouse-cursor"></div>
+
+<!-- CAMERA PANEL -->
+<div id="cam-wrap">
+  <video id="cam-video" playsinline></video>
+  <canvas id="cam-canvas"></canvas>
+  <span id="cam-label">GESTURE ON</span>
+  <span id="cam-status"></span>
+</div>
+
+<!-- GESTURE GUIDE -->
+<div id="gesture-guide">
+  <div class="g-title">Hand Controls</div>
+  <div class="g-row"><span class="g-icon">☝️</span> Point = move cursor</div>
+  <div class="g-row"><span class="g-icon">🤏</span> Pinch = click</div>
+  <div class="g-row"><span class="g-icon">👋</span> Swipe L/R = shuffle</div>
+  <div class="g-row"><span class="g-icon">✋</span> Open palm = scroll</div>
+</div>
+
+<!-- GESTURE FLASH -->
+<div id="gesture-flash"></div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- NAV -->
+<nav>
+  <span class="logo">VER<em>D</em>ANT</span>
+  <ul>
+    <li><a href="#menu">Menu</a></li>
+    <li><a href="#specials">Specials</a></li>
+    <li><a href="#process">How It Works</a></li>
+  </ul>
+  <button class="nav-cart" onclick="toggleCart()">
+    🛒 Cart
+    <span class="cart-count" id="cart-count">0</span>
+  </button>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-noise"></div>
+  <div class="hero-content">
+    <p class="hero-eyebrow">✦ Fine dining, delivered</p>
+    <h1 class="hero-title">Taste the<em>Extraordinary</em></h1>
+    <p class="hero-body">Restaurant-quality cuisine crafted by Michelin-starred chefs, delivered to your door within 30 minutes.</p>
+    <div class="hero-btns">
+      <button class="btn-primary" onclick="document.getElementById('menu').scrollIntoView({behavior:'smooth'})">Explore Menu</button>
+      <button class="btn-ghost" onclick="document.getElementById('process').scrollIntoView({behavior:'smooth'})">How It Works</button>
+    </div>
+  </div>
+  <div class="hero-orbit">
+    <div class="orbit-ring"></div>
+    <div class="orbit-ring"></div>
+    <div class="orbit-ring"></div>
+    <span class="f-item">🍔</span>
+    <span class="f-item">🍜</span>
+    <span class="f-item">🍣</span>
+  </div>
+  <div class="scroll-ind">
+    <div class="scroll-line"></div>
+    <span class="scroll-txt">Scroll</span>
+  </div>
+</section>
+
+<!-- STATS -->
+<section id="stats">
+  <div class="stat-item sr"><span class="stat-num">98%</span><span class="stat-lbl">Satisfaction Rate</span></div>
+  <div class="stat-item sr"><span class="stat-num">45+</span><span class="stat-lbl">Premium Dishes</span></div>
+  <div class="stat-item sr"><span class="stat-num">28min</span><span class="stat-lbl">Avg. Delivery</span></div>
+  <div class="stat-item sr"><span class="stat-num">12K+</span><span class="stat-lbl">Orders Delivered</span></div>
+</section>
+
+<!-- MENU -->
+<section id="menu">
+  <div class="section-header-row sr">
+    <div>
+      <p class="section-label">✦ Our Offerings</p>
+      <h2 class="section-title">Curated Menu</h2>
+    </div>
+    <button class="shuffle-btn" onclick="shuffleMenu()"><span class="shuffle-icon">⟳</span> Shuffle</button>
+  </div>
+  <div class="filter-row sr">
+    <button class="filter-btn active" onclick="filterMenu('all',this)">All</button>
+    <button class="filter-btn" onclick="filterMenu('starters',this)">Starters</button>
+    <button class="filter-btn" onclick="filterMenu('mains',this)">Mains</button>
+    <button class="filter-btn" onclick="filterMenu('desserts',this)">Desserts</button>
+    <button class="filter-btn" onclick="filterMenu('drinks',this)">Drinks</button>
+  </div>
+  <div class="menu-grid" id="menu-grid"></div>
+</section>
+
+<!-- SPECIALS -->
+<section id="specials">
+  <div class="specials-visual sr-left">
+    <div class="spec-card"><span class="spec-emoji">🦞</span><div class="spec-name">Lobster Bisque</div><div class="spec-price">₹2,800</div><div class="spec-off">30% off today</div></div>
+    <div class="spec-card"><span class="spec-emoji">🍫</span><div class="spec-name">Chocolate Fondant</div><div class="spec-price">₹1,200</div><div class="spec-off">Chef's special</div></div>
+    <div class="spec-card"><span class="spec-emoji">🍾</span><div class="spec-name">Celebration Bundle</div><div class="spec-price">₹6,500</div><div class="spec-off">Save ₹1,500</div></div>
+  </div>
+  <div class="specials-text sr-right">
+    <p class="section-label">✦ Limited Time</p>
+    <h2 class="section-title">Today's Specials</h2>
+    <p>Handpicked by our executive chef each morning, using only the finest seasonal ingredients sourced from local farms and global artisans.</p>
+    <ul>
+      <li><span class="check">✓</span> Farm-to-table freshness guaranteed</li>
+      <li><span class="check">✓</span> Michelin-trained culinary team</li>
+      <li><span class="check">✓</span> Eco-friendly premium packaging</li>
+      <li><span class="check">✓</span> 30-minute delivery or free</li>
+    </ul>
+    <button class="btn-primary" onclick="document.getElementById('menu').scrollIntoView({behavior:'smooth'})">Order Now</button>
+  </div>
+</section>
+
+<!-- PROCESS -->
+<section id="process">
+  <p class="section-label sr">✦ Simple Steps</p>
+  <h2 class="section-title sr" style="margin-bottom:60px;">From Kitchen to Your Table</h2>
+  <div class="process-grid">
+    <div class="process-step sr"><div class="step-num">🍽️</div><h3 class="step-title">Browse Menu</h3><p class="step-desc">Explore our curated selection of 45+ premium dishes</p></div>
+    <div class="process-step sr" style="transition-delay:.1s"><div class="step-num">🛒</div><h3 class="step-title">Add to Cart</h3><p class="step-desc">Build your order with just a gesture or a click</p></div>
+    <div class="process-step sr" style="transition-delay:.2s"><div class="step-num">💳</div><h3 class="step-title">Secure Checkout</h3><p class="step-desc">Fast, encrypted payment powered by Stripe</p></div>
+    <div class="process-step sr" style="transition-delay:.3s"><div class="step-num">🚴</div><h3 class="step-title">Swift Delivery</h3><p class="step-desc">Hot, fresh, and at your door in under 30 minutes</p></div>
+  </div>
+</section>
+
+<!-- CART SIDEBAR -->
+<div id="cart">
+  <div class="cart-head">
+    <h2>Your Order</h2>
+    <button class="close-cart" onclick="toggleCart()">×</button>
+  </div>
+  <div class="cart-items-list" id="cart-items-list"></div>
+  <div class="cart-summary" id="cart-summary"></div>
+</div>
+
+<!-- PAYMENT MODAL -->
+<div id="payment-overlay">
+  <div class="modal">
+    <div id="payment-form-section">
+      <div class="modal-top">
+        <div>
+          <h2 class="modal-title">Checkout</h2>
+          <p class="modal-sub">Complete your premium order</p>
+        </div>
+        <button class="close-modal" onclick="closeModal()">×</button>
+      </div>
+      <div class="order-summary-mini" id="order-summary-mini"></div>
+      <div class="form-group">
+        <label class="form-label">Full Name</label>
+        <input class="form-input" id="cust-name" type="text" placeholder="Your name">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="cust-email" type="email" placeholder="your@email.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Delivery Address</label>
+        <input class="form-input" id="cust-addr" type="text" placeholder="Street address, city">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Card Details</label>
+        <div class="stripe-field" id="card-element"></div>
+      </div>
+      <div class="test-note">
+        🧪 Test Mode — Use card: 4242 4242 4242 4242 · Any future date · Any CVV
+      </div>
+      <button class="pay-btn" id="pay-btn" onclick="handlePayment()">
+        <span id="pay-txt">Pay Securely</span>
+        <div class="spinner" id="pay-spinner"></div>
+      </button>
+      <p class="secure-note">🔒 256-bit encrypted · Powered by Stripe</p>
+    </div>
+    <div id="success-screen">
+      <span class="success-icon">🎉</span>
+      <h2 class="success-title">Order Confirmed!</h2>
+      <p class="success-sub">Your premium meal is being prepared with care.<br>Estimated delivery: <strong>28 minutes</strong></p>
+      <button class="btn-primary" style="margin-top:28px;" onclick="closeModal();clearCart()">Track Order</button>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <span class="logo">VER<em>D</em>ANT</span>
+      <p>Premium food delivery, reimagined. Michelin-quality cuisine crafted fresh and delivered to your door with elegance and speed.</p>
+      <div class="social-links" style="margin-top:24px;">
+        <a class="social-link" href="#">✦</a>
+        <a class="social-link" href="#">⊕</a>
+        <a class="social-link" href="#">◈</a>
+      </div>
+    </div>
+    <div class="footer-col">
+      <h4>Menu</h4>
+      <ul>
+        <li><a href="#">Starters</a></li>
+        <li><a href="#">Mains</a></li>
+        <li><a href="#">Desserts</a></li>
+        <li><a href="#">Drinks</a></li>
+        <li><a href="#">Chef Specials</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Company</h4>
+      <ul>
+        <li><a href="#">About Us</a></li>
+        <li><a href="#">Our Chefs</a></li>
+        <li><a href="#">Sustainability</a></li>
+        <li><a href="#">Press</a></li>
+        <li><a href="#">Careers</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Support</h4>
+      <ul>
+        <li><a href="#">Track Order</a></li>
+        <li><a href="#">FAQs</a></li>
+        <li><a href="#">Contact</a></li>
+        <li><a href="#">Privacy Policy</a></li>
+        <li><a href="#">Terms of Use</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2025 VERDANT. All rights reserved.</span>
+    <span>Crafted with 🌿</span>
+  </div>
+</footer>
+
+<script>
+/* ═══════════════════════════════════════
+   DATA
+═══════════════════════════════════════ */
+const MENU_ITEMS = [
+  {id:1,name:'Truffle Risotto',emoji:'🍚',desc:'Black truffle, parmesan, aged arborio rice, white wine reduction',price:2200,badge:'CHEF\'S PICK',badgeType:'gold',cat:'mains'},
+  {id:2,name:'Wagyu Burger',emoji:'🍔',desc:'A5 Wagyu beef, caramelized onion, aged cheddar, brioche bun',price:3800,badge:'BESTSELLER',badgeType:'gold',cat:'mains'},
+  {id:3,name:'Lobster Bisque',emoji:'🦞',desc:'Maine lobster, saffron cream, cognac, chive oil',price:2800,badge:null,badgeType:null,cat:'starters'},
+  {id:4,name:'Salmon Tartare',emoji:'🐟',desc:'Atlantic salmon, avocado, yuzu dressing, crispy capers',price:2200,badge:'NEW',badgeType:'new',cat:'starters'},
+  {id:5,name:'Dark Chocolate Fondant',emoji:'🍫',desc:'70% Valrhona, Madagascar vanilla ice cream, gold leaf',price:1400,badge:null,badgeType:null,cat:'desserts'},
+  {id:6,name:'Crème Brûlée',emoji:'🍮',desc:'Madagascar vanilla bean custard, caramelized sugar crust',price:1200,badge:null,badgeType:null,cat:'desserts'},
+  {id:7,name:'Smoked Duck Breast',emoji:'🦆',desc:'Cherry reduction, pommes dauphinoise, micro herbs',price:3400,badge:'SEASONAL',badgeType:'gold',cat:'mains'},
+  {id:8,name:'Burrata Salad',emoji:'🥗',desc:'Heirloom tomatoes, fresh burrata, aged balsamic, basil oil',price:1800,badge:null,badgeType:null,cat:'starters'},
+  {id:9,name:'Elderflower Spritz',emoji:'🍾',desc:'Elderflower, cucumber, sparkling water, lime',price:800,badge:'POPULAR',badgeType:'gold',cat:'drinks'},
+  {id:10,name:'Matcha Latte',emoji:'🍵',desc:'Ceremonial grade matcha, oat milk, light honey',price:650,badge:null,badgeType:null,cat:'drinks'},
+  {id:11,name:'Tiramisu Royale',emoji:'🎂',desc:'Savoiardi, mascarpone, espresso, dark cocoa, amaretto',price:1300,badge:'NEW',badgeType:'new',cat:'desserts'},
+  {id:12,name:'Grilled Sea Bass',emoji:'🐠',desc:'Mediterranean sea bass, lemon beurre blanc, wilted spinach',price:3200,badge:null,badgeType:null,cat:'mains'},
+];
+
+let cart = [];
+let filteredItems = [...MENU_ITEMS];
+let stripe, cardElement;
+let gestureMode = false;
+
+/* ═══════════════════════════════════════
+   RENDER MENU
+═══════════════════════════════════════ */
+function renderMenu(items = filteredItems) {
+  const grid = document.getElementById('menu-grid');
+  grid.innerHTML = items.map(item => `
+    <div class="menu-card sr" id="card-${item.id}" onclick="addToCart(${item.id})">
+      <div class="card-img">
+        <span>${item.emoji}</span>
+        ${item.badge ? `<span class="card-badge ${item.badgeType === 'new' ? 'new-badge' : ''}">${item.badge}</span>` : ''}
+      </div>
+      <div class="card-body">
+        <h3 class="card-name">${item.name}</h3>
+        <p class="card-desc">${item.desc}</p>
+        <div class="card-footer">
+          <span class="card-price">₹${item.price.toLocaleString()}</span>
+          <button class="add-btn" id="add-btn-${item.id}" onclick="event.stopPropagation();addToCart(${item.id})">+</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+  setTimeout(() => observeScrollElements(), 50);
+}
+
+/* ═══════════════════════════════════════
+   FILTER
+═══════════════════════════════════════ */
+function filterMenu(cat, btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  filteredItems = cat === 'all' ? [...MENU_ITEMS] : MENU_ITEMS.filter(i => i.cat === cat);
+  const grid = document.getElementById('menu-grid');
+  grid.style.opacity = '0';
+  grid.style.transform = 'translateY(16px)';
+  setTimeout(() => {
+    renderMenu(filteredItems);
+    grid.style.transition = 'opacity .4s, transform .4s';
+    grid.style.opacity = '1';
+    grid.style.transform = 'translateY(0)';
+  }, 200);
+}
+
+/* ═══════════════════════════════════════
+   SHUFFLE
+═══════════════════════════════════════ */
+function shuffleMenu() {
+  const grid = document.getElementById('menu-grid');
+  const cards = [...grid.children];
+  cards.forEach(c => { c.style.animation = 'none'; c.classList.add('shuffle-out'); });
+  showGestureFlash('SHUFFLING ⟳');
+  setTimeout(() => {
+    filteredItems = [...filteredItems].sort(() => Math.random() - 0.5);
+    renderMenu(filteredItems);
+    document.querySelectorAll('.menu-card').forEach((c, i) => {
+      c.style.animationDelay = `${i * 0.06}s`;
+      c.style.animation = 'shuffleIn .45s ease forwards';
+    });
+  }, 300);
+}
+
+/* ═══════════════════════════════════════
+   CART
+═══════════════════════════════════════ */
+function addToCart(id) {
+  const item = MENU_ITEMS.find(i => i.id === id);
+  const existing = cart.find(c => c.id === id);
+  if (existing) { existing.qty++; }
+  else { cart.push({...item, qty: 1}); }
+  updateCartUI();
+  showToast(`${item.emoji} ${item.name} added to cart`);
+  const btn = document.getElementById(`add-btn-${id}`);
+  if (btn) { btn.classList.add('added'); setTimeout(() => btn.classList.remove('added'), 500); }
+}
+
+function updateQty(id, delta) {
+  const item = cart.find(c => c.id === id);
+  if (!item) return;
+  item.qty += delta;
+  if (item.qty <= 0) cart = cart.filter(c => c.id !== id);
+  updateCartUI();
+}
+
+function removeFromCart(id) {
+  cart = cart.filter(c => c.id !== id);
+  updateCartUI();
+}
+
+function clearCart() {
+  cart = [];
+  updateCartUI();
+}
+
+function updateCartUI() {
+  const totalItems = cart.reduce((s, i) => s + i.qty, 0);
+  const totalPrice = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const countEl = document.getElementById('cart-count');
+  countEl.textContent = totalItems;
+  countEl.classList.toggle('show', totalItems > 0);
+
+  const listEl = document.getElementById('cart-items-list');
+  const summEl = document.getElementById('cart-summary');
+
+  if (cart.length === 0) {
+    listEl.innerHTML = `<div class="empty-cart"><span class="ec-icon">🛒</span><p>Your cart is empty</p></div>`;
+    summEl.innerHTML = '';
+    return;
+  }
+
+  listEl.innerHTML = cart.map(item => `
+    <div class="cart-item">
+      <span class="ci-emoji">${item.emoji}</span>
+      <div class="ci-info">
+        <div class="ci-name">${item.name}</div>
+        <div class="ci-price">₹${(item.price * item.qty).toLocaleString()}</div>
+        <div class="ci-qty">
+          <button class="qty-btn" onclick="updateQty(${item.id},-1)">−</button>
+          <span class="qty-num">${item.qty}</span>
+          <button class="qty-btn" onclick="updateQty(${item.id},1)">+</button>
+        </div>
+      </div>
+      <button class="ci-del" onclick="removeFromCart(${item.id})">×</button>
+    </div>
+  `).join('');
+
+  const delivery = 99;
+  const tax = Math.round(totalPrice * 0.05);
+  summEl.innerHTML = `
+    <div class="summary-row"><span>Subtotal</span><span>₹${totalPrice.toLocaleString()}</span></div>
+    <div class="summary-row"><span>Delivery</span><span>₹${delivery}</span></div>
+    <div class="summary-row"><span>GST (5%)</span><span>₹${tax.toLocaleString()}</span></div>
+    <div class="summary-row total"><span>Total</span><span>₹${(totalPrice + delivery + tax).toLocaleString()}</span></div>
+    <button class="checkout-btn" onclick="openModal()">Proceed to Payment →</button>
+  `;
+}
+
+function toggleCart() {
+  document.getElementById('cart').classList.toggle('open');
+}
+
+/* ═══════════════════════════════════════
+   PAYMENT MODAL
+═══════════════════════════════════════ */
+function openModal() {
+  if (cart.length === 0) { showToast('Add items to cart first!'); return; }
+  document.getElementById('cart').classList.remove('open');
+  document.getElementById('payment-overlay').classList.add('active');
+  document.getElementById('payment-form-section').style.display = 'block';
+  document.getElementById('success-screen').classList.remove('active');
+
+  const totalPrice = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const delivery = 99;
+  const tax = Math.round(totalPrice * 0.05);
+  const grandTotal = totalPrice + delivery + tax;
+
+  document.getElementById('order-summary-mini').innerHTML = `
+    <div class="osm-title">Order Summary</div>
+    ${cart.map(i => `<div class="osm-item"><span>${i.emoji} ${i.name} × ${i.qty}</span><span>₹${(i.price * i.qty).toLocaleString()}</span></div>`).join('')}
+    <div class="osm-total"><span>Grand Total</span><span>₹${grandTotal.toLocaleString()}</span></div>
+  `;
+
+  initStripe();
+}
+
+function closeModal() {
+  document.getElementById('payment-overlay').classList.remove('active');
+}
+
+function initStripe() {
+  if (cardElement) return;
+  // Replace with your Stripe publishable key
+  stripe = Stripe('pk_test_51OxxxxxxxxxYOUR_STRIPE_KEY_HERE');
+  const elements = stripe.elements({
+    appearance: {
+      theme: 'night',
+      variables: {
+        colorPrimary: '#3ddc84',
+        colorBackground: '#0a1f12',
+        colorText: '#f0f7f2',
+        colorDanger: '#ff6b6b',
+        borderRadius: '8px',
+        fontFamily: 'Cormorant Garamond, serif',
+      }
+    }
+  });
+  cardElement = elements.create('card', {
+    style: {
+      base: {
+        iconColor: '#3ddc84',
+        color: '#f0f7f2',
+        fontFamily: 'Cormorant Garamond, serif',
+        fontSize: '16px',
+        '::placeholder': { color: 'rgba(240,247,242,0.4)' }
+      }
+    }
+  });
+  cardElement.mount('#card-element');
+}
+
+async function handlePayment() {
+  const name = document.getElementById('cust-name').value.trim();
+  const email = document.getElementById('cust-email').value.trim();
+  if (!name || !email) { showToast('Please fill in all fields'); return; }
+
+  const btn = document.getElementById('pay-btn');
+  const txt = document.getElementById('pay-txt');
+  const spinner = document.getElementById('pay-spinner');
+  btn.disabled = true;
+  txt.style.display = 'none';
+  spinner.style.display = 'block';
+
+  /* In production: call your backend to create a PaymentIntent
+     and get the clientSecret, then use stripe.confirmCardPayment() */
+  
+  // DEMO: simulate payment (replace with real Stripe integration)
+  try {
+    await new Promise(r => setTimeout(r, 2200)); // Simulate API call
+    /* Real implementation:
+    const res = await fetch('/api/create-payment-intent', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ amount: grandTotal * 100, currency: 'inr' })
+    });
+    const { clientSecret } = await res.json();
+    const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+      payment_method: { card: cardElement, billing_details: { name, email } }
+    });
+    if (error) throw error;
+    */
+    showSuccess();
+  } catch (err) {
+    showToast('Payment failed: ' + (err.message || 'Please try again'));
+    btn.disabled = false;
+    txt.style.display = 'block';
+    spinner.style.display = 'none';
+  }
+}
+
+function showSuccess() {
+  document.getElementById('payment-form-section').style.display = 'none';
+  document.getElementById('success-screen').classList.add('active');
+}
+
+/* ═══════════════════════════════════════
+   TOAST
+═══════════════════════════════════════ */
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+/* ═══════════════════════════════════════
+   SCROLL ANIMATIONS
+═══════════════════════════════════════ */
+function observeScrollElements() {
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.sr, .sr-left, .sr-right').forEach(el => observer.observe(el));
+}
+
+/* ═══════════════════════════════════════
+   MOUSE CURSOR
+═══════════════════════════════════════ */
+const mouseCursor = document.getElementById('mouse-cursor');
+document.addEventListener('mousemove', e => {
+  mouseCursor.style.left = e.clientX + 'px';
+  mouseCursor.style.top = e.clientY + 'px';
+});
+
+/* ═══════════════════════════════════════
+   GESTURE FLASH
+═══════════════════════════════════════ */
+function showGestureFlash(msg) {
+  const el = document.getElementById('gesture-flash');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 1000);
+}
+
+/* ═══════════════════════════════════════
+   MEDIAPIPE HANDS
+═══════════════════════════════════════ */
+const handCursor = document.getElementById('hand-cursor');
+const camStatus = document.getElementById('cam-status');
+const camCanvas = document.getElementById('cam-canvas');
+const camCtx = camCanvas.getContext('2d');
+const camVideo = document.getElementById('cam-video');
+
+let lastWristX = null, lastWristY = null;
+let pinching = false;
+let lastPinchTime = 0;
+let swipeStartX = null;
+let swipeStartY = null;
+let handVisible = false;
+
+function initMediaPipe() {
+  const hands = new Hands({
+    locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+  });
+  hands.setOptions({
+    maxNumHands: 1,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.7,
+    minTrackingConfidence: 0.7
+  });
+  hands.onResults(onHandResults);
+
+  const camera = new Camera(camVideo, {
+    onFrame: async () => { await hands.send({image: camVideo}); },
+    width: 320, height: 240
+  });
+  camera.start().then(() => {
+    camStatus.classList.add('active');
+    gestureMode = true;
+  }).catch(err => {
+    console.warn('Camera not available:', err);
+    document.getElementById('cam-wrap').style.display = 'none';
+    document.getElementById('gesture-guide').style.display = 'none';
+  });
+}
+
+function onHandResults(results) {
+  camCtx.clearRect(0, 0, camCanvas.width, camCanvas.height);
+
+  if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+    handVisible = false;
+    handCursor.style.opacity = '0';
+    lastWristX = null; lastWristY = null; swipeStartX = null;
+    return;
+  }
+
+  handVisible = true;
+  handCursor.style.opacity = '1';
+
+  const lm = results.multiHandLandmarks[0];
+
+  // Draw skeleton
+  if (results.multiHandConnections) {
+    drawConnectors(camCtx, lm, HAND_CONNECTIONS, {color:'rgba(61,220,132,0.5)',lineWidth:1});
+    drawLandmarks(camCtx, lm, {color:'rgba(61,220,132,0.8)',lineWidth:1,radius:2});
+  }
+
+  const wrist = lm[0];
+  const indexTip = lm[8];
+  const thumbTip = lm[4];
+  const indexMid = lm[6];
+
+  // Map index finger to screen (mirror X)
+  const cursorX = (1 - indexTip.x) * window.innerWidth;
+  const cursorY = indexTip.y * window.innerHeight;
+
+  handCursor.style.left = cursorX + 'px';
+  handCursor.style.top = cursorY + 'px';
+
+  // Pinch detection
+  const pinchDist = Math.sqrt(
+    Math.pow((thumbTip.x - indexTip.x) * window.innerWidth, 2) +
+    Math.pow((thumbTip.y - indexTip.y) * window.innerHeight, 2)
+  );
+
+  const isPinching = pinchDist < 45;
+  if (isPinching && !pinching) {
+    pinching = true;
+    handCursor.classList.add('pinch');
+    const now = Date.now();
+    if (now - lastPinchTime > 600) {
+      lastPinchTime = now;
+      simulateClick(cursorX, cursorY);
+    }
+  } else if (!isPinching && pinching) {
+    pinching = false;
+    handCursor.classList.remove('pinch');
+  }
+
+  // Swipe detection for shuffle (wrist horizontal movement)
+  const wristX = (1 - wrist.x) * window.innerWidth;
+  const wristY = wrist.y * window.innerHeight;
+
+  if (lastWristX !== null) {
+    const dx = wristX - lastWristX;
+    const dy = wristY - lastWristY;
+
+    // Horizontal swipe → shuffle
+    if (Math.abs(dx) > 28 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (!window._swipeCooldown) {
+        window._swipeCooldown = true;
+        setTimeout(() => { window._swipeCooldown = false; }, 1000);
+        if (dx > 0) { showGestureFlash('SWIPE RIGHT →'); shuffleMenu(); }
+        else { showGestureFlash('← SWIPE LEFT'); shuffleMenu(); }
+      }
+    }
+
+    // Vertical swipe → scroll
+    if (Math.abs(dy) > 18 && Math.abs(dy) > Math.abs(dx) * 1.2) {
+      window.scrollBy({ top: dy * 3, behavior: 'auto' });
+    }
+  }
+
+  lastWristX = wristX;
+  lastWristY = wristY;
+}
+
+function simulateClick(x, y) {
+  const el = document.elementFromPoint(x, y);
+  if (el) {
+    el.classList.add('hovered');
+    setTimeout(() => el.classList.remove('hovered'), 300);
+    el.click();
+    showGestureFlash('PINCH ✓');
+  }
+}
+
+// Resize canvas on load
+camVideo.addEventListener('loadedmetadata', () => {
+  camCanvas.width = camVideo.videoWidth;
+  camCanvas.height = camVideo.videoHeight;
+});
+
+/* ═══════════════════════════════════════
+   PARTICLES
+═══════════════════════════════════════ */
+function spawnParticles() {
+  const hero = document.getElementById('hero');
+  for (let i = 0; i < 18; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const size = Math.random() * 5 + 2;
+    p.style.cssText = `
+      width:${size}px; height:${size}px;
+      left:${Math.random() * 100}%;
+      bottom:-10px;
+      animation: floatUp ${10 + Math.random() * 15}s linear ${Math.random() * 12}s infinite;
+      opacity:0;
+    `;
+    hero.appendChild(p);
+  }
+
+  const style = document.createElement('style');
+  style.textContent = `@keyframes floatUp {
+    0%{transform:translateY(0) scale(0);opacity:0;}
+    10%{opacity:0.18;}
+    90%{opacity:0.12;}
+    100%{transform:translateY(-100vh) scale(1.2);opacity:0;}
+  }`;
+  document.head.appendChild(style);
+}
+
+/* ═══════════════════════════════════════
+   INIT
+═══════════════════════════════════════ */
+renderMenu();
+observeScrollElements();
+spawnParticles();
+
+// Try to init MediaPipe (will gracefully fail if no camera)
+try { initMediaPipe(); } catch(e) { console.warn('MediaPipe not loaded yet, retrying...', e); }
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeModal(); document.getElementById('cart').classList.remove('open'); }
+  if (e.key === 's') shuffleMenu();
+  if (e.key === 'c') toggleCart();
+});
+</script>
+</body>
+</html>
